@@ -20,19 +20,37 @@ looker.plugins.visualizations.add({
         height: 100%;
         background: white;
         position: relative;
-        display: flex;
-        flex-direction: column;
       }
       .viewer-container {
-        flex: 1;
+        width: 100%;
+        height: 100%;
         display: flex;
         flex-direction: column;
       }
-      .viewer-frame {
+      .pdf-frame {
         flex: 1;
         border: none;
-        width: 100%;
-        height: 100%;
+        min-height: 500px;
+      }
+      .pdf-nav {
+        padding: 10px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+      }
+      .pdf-link {
+        display: inline-block;
+        padding: 8px 16px;
+        background: #4285f4;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        margin: 0 5px;
+      }
+      .error-message {
+        padding: 20px;
+        text-align: center;
+        color: #d32f2f;
       }
     `;
     element.appendChild(style);
@@ -56,17 +74,18 @@ looker.plugins.visualizations.add({
     // Set container height
     this.container.style.height = `${height}px`;
 
-    // Set up the viewer iframe
-    const frame = document.createElement('iframe');
-    frame.className = 'viewer-frame';
-    
-    // Use Google Docs viewer
-    const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(pdfUrl)}&embedded=true`;
-    frame.src = googleViewerUrl;
-    
-    // Clear previous content and add new frame
-    this.viewerContainer.innerHTML = '';
-    this.viewerContainer.appendChild(frame);
+    // Create navigation and frame
+    this.viewerContainer.innerHTML = `
+      <div class="pdf-nav">
+        <a href="${pdfUrl}" target="_blank" class="pdf-link">Open PDF in New Tab</a>
+      </div>
+      <iframe 
+        class="pdf-frame"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        src="/api/embed/pdf?url=${encodeURIComponent(pdfUrl)}"
+        style="height: ${height - 60}px"
+      ></iframe>
+    `;
 
     doneRendering();
   }
