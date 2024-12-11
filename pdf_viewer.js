@@ -41,15 +41,6 @@ looker.plugins.visualizations.add({
         width: 100%;
         height: 100%;
       }
-      .pdf-link {
-        display: inline-block;
-        padding: 10px 20px;
-        background: #4285f4;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        margin-top: 10px;
-      }
       .pdf-frame {
         width: 100%;
         height: 100%;
@@ -77,22 +68,50 @@ looker.plugins.visualizations.add({
     // Set container height
     this.container.style.height = `${height}px`;
     
-    // Create a direct link to the PDF
-    this.messageEl.innerHTML = `
-      <div>
-        <p>Click below to open the PDF</p>
-        <a href="${pdfUrl}" target="_blank" class="pdf-link">Open PDF</a>
-      </div>
-    `;
-    this.messageEl.className = "pdf-message visible";
-
-    // Also try to embed it
+    // Create the iframe with specific attributes for authentication
     this.viewerContainer.innerHTML = '';
     const frame = document.createElement('iframe');
     frame.className = 'pdf-frame';
-    frame.src = pdfUrl;
-    this.viewerContainer.appendChild(frame);
+    frame.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-presentation');
+    frame.setAttribute('allow', 'fullscreen');
+    
+    // Use a data URL to create an HTML wrapper that preserves authentication
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+            #pdf-embed { width: 100%; height: 100%; border: none; }
+          </style>
+        </head>
+        <body>
+          <embed id="pdf-embed" 
+                 type="application/pdf" 
+                 src="${pdfUrl}"
+                 width="100%"
+                 height="100%">
+        </body>
+      </html>
+    `;
+    
+    // Create blob URL
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    frame.src = URL.createObjectURL(blob);
+    
+    frame.onload = () => {
+      console.log('Frame loaded');
+      this.messageEl.className = "pdf-message";
+    };
+    
+    frame.onerror = (error) => {
+      console.error('Frame load error:', error);
+      this.messageEl.textContent = "Error loading PDF. Please check permissions and try again.";
+      this.messageEl.className = "pdf-message visible";
+    };
 
+    this.viewerContainer.appendChild(frame);
     doneRendering();
   }
 });
