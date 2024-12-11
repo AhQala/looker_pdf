@@ -20,8 +20,8 @@ looker.plugins.visualizations.add({
     this.messageEl = this.container.appendChild(document.createElement("div"));
     this.messageEl.className = "pdf-message visible";
     this.messageEl.textContent = "Loading PDF...";
-    this.canvasContainer = this.container.appendChild(document.createElement("div"));
-    this.canvasContainer.className = "canvas-container";
+    this.viewerContainer = this.container.appendChild(document.createElement("div"));
+    this.viewerContainer.className = "pdf-viewer";
 
     // Add styles
     const style = document.createElement("style");
@@ -29,7 +29,7 @@ looker.plugins.visualizations.add({
       .pdf-container {
         width: 100%;
         height: 100%;
-        overflow: auto;
+        overflow: hidden;
         background: #525659;
         position: relative;
       }
@@ -43,30 +43,18 @@ looker.plugins.visualizations.add({
       .pdf-message.visible {
         display: block;
       }
-      .canvas-container {
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      .canvas-container canvas {
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      .pdf-viewer {
+        width: 100%;
+        height: 100%;
         background: white;
+      }
+      .pdf-viewer object {
+        width: 100%;
+        height: 100%;
+        border: none;
       }
     `;
     element.appendChild(style);
-
-    // Load PDF.js if not already loaded
-    if (!window.pdfjsLib) {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-      script.onload = () => {
-        console.log('PDF.js loaded');
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      };
-      document.head.appendChild(script);
-    }
   },
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
     this.clearErrors();
@@ -79,78 +67,38 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
+    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value.replace(
+      'storage.googleapis.com',
+      'storage.mtls.cloud.google.com'
+    );
     const height = config.pdf_height || this.options.pdf_height.default;
-    const scale = config.scale || this.options.scale.default;
     
     console.log('Attempting to load PDF from:', pdfUrl);
     
     // Set container height
     this.container.style.height = `${height}px`;
     
-    // Clear previous content
-    this.canvasContainer.innerHTML = '';
-    this.messageEl.className = "pdf-message visible";
-    this.messageEl.textContent = "Loading PDF...";
+    // Create iframe for PDF
+    this.viewerContainer.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.src = pdfUrl;
 
-    // Function to render a single page
-    const renderPage = async (page, pageNumber) => {
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport
-      };
-
-      try {
-        await page.render(renderContext).promise;
-        this.canvasContainer.appendChild(canvas);
-        console.log(`Page ${pageNumber} rendered successfully`);
-      } catch (error) {
-        console.error(`Error rendering page ${pageNumber}:`, error);
-      }
+    // Add load event listener
+    iframe.onload = () => {
+      console.log('PDF loaded successfully');
+      this.messageEl.className = "pdf-message";
     };
 
-    // Load and render PDF
-    if (window.pdfjsLib) {
-      // Get authentication token if available
-      const authToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('token='))
-        ?.split('=')[1];
+    // Add error event listener
+    iframe.onerror = (error) => {
+      console.error('Error loading PDF:', error);
+      this.messageEl.textContent = "Error loading PDF. Please check permissions and try again.";
+    };
 
-      const loadingTask = window.pdfjsLib.getDocument({
-        url: pdfUrl,
-        httpHeaders: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
-      });
-
-      loadingTask.promise
-        .then(async (pdf) => {
-          console.log('PDF loaded successfully');
-          this.messageEl.className = "pdf-message";
-          
-          // Render all pages
-          const pagePromises = [];
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            const page = await pdf.getPage(pageNum);
-            pagePromises.push(renderPage(page, pageNum));
-          }
-          
-          await Promise.all(pagePromises);
-          doneRendering();
-        })
-        .catch((error) => {
-          console.error('Error loading PDF:', error);
-          this.messageEl.textContent = "Error loading PDF. Please check permissions and try again.";
-          doneRendering();
-        });
-    } else {
-      console.log('Waiting for PDF.js to load...');
-      setTimeout(() => this.updateAsync(data, element, config, queryResponse, details, doneRendering), 1000);
-    }
+    this.viewerContainer.appendChild(iframe);
+    doneRendering();
   }
 });
