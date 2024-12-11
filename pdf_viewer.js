@@ -48,7 +48,7 @@ looker.plugins.visualizations.add({
         height: 100%;
         background: white;
       }
-      .pdf-viewer object {
+      .pdf-viewer iframe {
         width: 100%;
         height: 100%;
         border: none;
@@ -67,34 +67,38 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value.replace(
-      'storage.googleapis.com',
-      'storage.mtls.cloud.google.com'
-    );
+    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
     const height = config.pdf_height || this.options.pdf_height.default;
     
-    console.log('Attempting to load PDF from:', pdfUrl);
+    console.log('Original PDF URL:', pdfUrl);
     
     // Set container height
     this.container.style.height = `${height}px`;
     
-    // Create iframe for PDF
+    // Create iframe with Google Docs viewer
     this.viewerContainer.innerHTML = '';
     const iframe = document.createElement('iframe');
     iframe.style.width = '100%';
     iframe.style.height = '100%';
     iframe.style.border = 'none';
-    iframe.src = pdfUrl;
+    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-presentation');
+    
+    // Use Google Docs viewer
+    const encodedUrl = encodeURIComponent(pdfUrl);
+    const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true`;
+    iframe.src = viewerUrl;
+    
+    console.log('Viewer URL:', viewerUrl);
 
     // Add load event listener
     iframe.onload = () => {
-      console.log('PDF loaded successfully');
+      console.log('PDF viewer loaded successfully');
       this.messageEl.className = "pdf-message";
     };
 
     // Add error event listener
     iframe.onerror = (error) => {
-      console.error('Error loading PDF:', error);
+      console.error('Error loading PDF viewer:', error);
       this.messageEl.textContent = "Error loading PDF. Please check permissions and try again.";
     };
 
