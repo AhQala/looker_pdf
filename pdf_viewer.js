@@ -8,43 +8,44 @@ looker.plugins.visualizations.add({
     }
   },
   create: function(element, config) {
-    // Create container elements
     this.container = element.appendChild(document.createElement("div"));
     this.container.className = "pdf-container";
-    this.messageEl = this.container.appendChild(document.createElement("div"));
-    this.messageEl.className = "pdf-message visible";
-    this.messageEl.textContent = "Loading PDF...";
     this.viewerContainer = this.container.appendChild(document.createElement("div"));
-    this.viewerContainer.className = "pdf-viewer";
+    this.viewerContainer.className = "viewer-container";
 
-    // Add styles
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
         width: 100%;
         height: 100%;
-        overflow: hidden;
         background: white;
         position: relative;
+        display: flex;
+        flex-direction: column;
       }
-      .pdf-message {
-        color: #333;
-        padding: 1rem;
-        text-align: center;
-        display: none;
+      .viewer-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .viewer-iframe {
+        flex: 1;
+        border: none;
+        background: white;
+      }
+      .loading-message {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #444;
         font-family: sans-serif;
       }
-      .pdf-message.visible {
-        display: block;
-      }
-      .pdf-viewer {
-        width: 100%;
-        height: 100%;
-      }
-      .pdf-frame {
-        width: 100%;
-        height: 100%;
-        border: none;
+      .error-message {
+        color: #d32f2f;
+        text-align: center;
+        padding: 20px;
+        font-family: sans-serif;
       }
     `;
     element.appendChild(style);
@@ -62,36 +63,74 @@ looker.plugins.visualizations.add({
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
     const height = config.pdf_height || this.options.pdf_height.default;
-    
-    console.log('Loading PDF from:', pdfUrl);
-    
-    // Set container height
     this.container.style.height = `${height}px`;
     
-    // Clear previous content
-    this.viewerContainer.innerHTML = '';
+    // Show loading message
+    this.viewerContainer.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
-    // Create a sandboxed iframe that uses Mozilla's PDF.js viewer
-    const frame = document.createElement('iframe');
-    frame.className = 'pdf-frame';
-    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+    // Create a data URL for the HTML content
+    const viewerHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body, html {
+              margin: 0;
+              padding: 0;
+              height: 100vh;
+              display: flex;
+              flex-direction: column;
+              overflow: hidden;
+            }
+            #viewerContainer {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+            }
+            iframe {
+              flex: 1;
+              border: none;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="viewerContainer">
+            <iframe 
+              src="https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(pdfUrl)}" 
+              width="100%" 
+              height="100%" 
+              frameborder="0">
+            </iframe>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'viewer-iframe';
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
     
-    // Use Mozilla's PDF.js viewer with our PDF URL
-    const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(pdfUrl)}`;
-    frame.src = viewerUrl;
-    console.log('Viewer URL:', viewerUrl);
-
-    frame.onload = () => {
-      console.log('PDF viewer loaded');
-      this.messageEl.className = "pdf-message";
+    // Handle load events
+    iframe.onload = () => {
+      console.log('Viewer frame loaded');
+      this.viewerContainer.querySelector('.loading-message')?.remove();
     };
 
-    frame.onerror = (error) => {
-      console.error('Error loading PDF viewer:', error);
-      this.messageEl.textContent = "Error loading PDF. Please check permissions and try again.";
+    // Handle errors
+    iframe.onerror = (error) => {
+      console.error('Error loading viewer:', error);
+      this.viewerContainer.innerHTML = '<div class="error-message">Error loading PDF. Please try again.</div>';
     };
 
-    this.viewerContainer.appendChild(frame);
+    // Set iframe content
+    this.viewerContainer.innerHTML = '';
+    this.viewerContainer.appendChild(iframe);
+    
+    // Create blob URL and set as iframe source
+    const blob = new Blob([viewerHtml], { type: 'text/html' });
+    iframe.src = URL.createObjectURL(blob);
+
     doneRendering();
   }
 });
