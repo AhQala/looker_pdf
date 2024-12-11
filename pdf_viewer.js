@@ -3,13 +3,7 @@ looker.plugins.visualizations.add({
     pdf_height: {
       type: "number",
       label: "Viewer Height (px)",
-      default: 600,
-      section: "PDF Settings"
-    },
-    scale: {
-      type: "number",
-      label: "Zoom Scale",
-      default: 1.0,
+      default: 800,
       section: "PDF Settings"
     }
   },
@@ -30,11 +24,11 @@ looker.plugins.visualizations.add({
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #525659;
+        background: white;
         position: relative;
       }
       .pdf-message {
-        color: white;
+        color: #333;
         padding: 1rem;
         text-align: center;
         display: none;
@@ -46,9 +40,17 @@ looker.plugins.visualizations.add({
       .pdf-viewer {
         width: 100%;
         height: 100%;
-        background: white;
       }
-      .pdf-viewer iframe {
+      .pdf-link {
+        display: inline-block;
+        padding: 10px 20px;
+        background: #4285f4;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        margin-top: 10px;
+      }
+      .pdf-frame {
         width: 100%;
         height: 100%;
         border: none;
@@ -70,39 +72,27 @@ looker.plugins.visualizations.add({
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
     const height = config.pdf_height || this.options.pdf_height.default;
     
-    console.log('Original PDF URL:', pdfUrl);
+    console.log('Loading PDF from:', pdfUrl);
     
     // Set container height
     this.container.style.height = `${height}px`;
     
-    // Create iframe with Google Docs viewer
+    // Create a direct link to the PDF
+    this.messageEl.innerHTML = `
+      <div>
+        <p>Click below to open the PDF</p>
+        <a href="${pdfUrl}" target="_blank" class="pdf-link">Open PDF</a>
+      </div>
+    `;
+    this.messageEl.className = "pdf-message visible";
+
+    // Also try to embed it
     this.viewerContainer.innerHTML = '';
-    const iframe = document.createElement('iframe');
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-presentation');
-    
-    // Use Google Docs viewer
-    const encodedUrl = encodeURIComponent(pdfUrl);
-    const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true`;
-    iframe.src = viewerUrl;
-    
-    console.log('Viewer URL:', viewerUrl);
+    const frame = document.createElement('iframe');
+    frame.className = 'pdf-frame';
+    frame.src = pdfUrl;
+    this.viewerContainer.appendChild(frame);
 
-    // Add load event listener
-    iframe.onload = () => {
-      console.log('PDF viewer loaded successfully');
-      this.messageEl.className = "pdf-message";
-    };
-
-    // Add error event listener
-    iframe.onerror = (error) => {
-      console.error('Error loading PDF viewer:', error);
-      this.messageEl.textContent = "Error loading PDF. Please check permissions and try again.";
-    };
-
-    this.viewerContainer.appendChild(iframe);
     doneRendering();
   }
 });
