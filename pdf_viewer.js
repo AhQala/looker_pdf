@@ -32,7 +32,6 @@ looker.plugins.visualizations.add({
     this.viewerContainer = this.container.appendChild(document.createElement("div"));
     this.viewerContainer.className = "viewer-container";
 
-    // Load PDF.js library
     if (!window.pdfjsLib) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -114,7 +113,6 @@ looker.plugins.visualizations.add({
       return doneRendering();
     }
 
-    // Check if PDF.js is loaded
     if (!window.pdfjsLib) {
       this.messageEl.textContent = 'Loading PDF viewer...';
       this.messageEl.className = 'pdf-message loading';
@@ -136,7 +134,9 @@ looker.plugins.visualizations.add({
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-      }
+        'Origin': 'https://efc66c30-8184-4bce-985b-2b39478647db.looker.app'
+      },
+      credentials: 'include'
     })
     .then(response => {
       if (!response.ok) {
