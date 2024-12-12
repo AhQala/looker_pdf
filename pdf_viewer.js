@@ -22,10 +22,6 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
-    element.appendChild(this.createStyles());
-  },
-
-  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -49,7 +45,7 @@ looker.plugins.visualizations.add({
         text-align: center;
       }
     `;
-    return style;
+    element.appendChild(style);
   },
 
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
@@ -61,33 +57,34 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const cloudFunctionUrl = config.cloud_function_url;
     const blobName = pdfUrl.split('/intel_hub_pdfs/')[1];
+    const cloudFunctionUrl = config.cloud_function_url;
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
     fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`, {
       method: 'GET',
-      mode: 'no-cors',
-      headers: {'Accept': 'application/json'}
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
     })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return response.json();
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch signed URL');
+      return data;
     })
-    .then(data => {
-      if (data.error) throw new Error(data.error);
-      return window.pdfjsLib.getDocument(data.signed_url).promise;
-    })
-    .then(pdf => this.renderPages(pdf))
+    .then(data => window.pdfjsLib.getDocument(data.signed_url).promise)
+    .then(pdf => this.renderPDF(pdf))
     .catch(error => {
-      console.error('Error:', error);
       this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+      console.error('Error:', error);
     })
     .finally(doneRendering);
   },
 
-  renderPages: async function(pdf) {
+  renderPDF: async function(pdf) {
     this.container.innerHTML = '';
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
