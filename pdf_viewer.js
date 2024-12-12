@@ -1,9 +1,9 @@
 looker.plugins.visualizations.add({
   options: {
-    apps_script_url: {
-      type: "string",
-      label: "Apps Script URL",
-      default: "https://script.google.com/a/macros/google.com/s/AKfycbxlrip7TgmjkGYGhDW-n_MQhUaAqaX30je8qLECTEcVG7klAm_W4GM8GQcvoCaxkZZs-g/exec",
+    image_height: {
+      type: "number",
+      label: "Image Height (px)",
+      default: 800,
       section: "Settings"
     }
   },
@@ -11,21 +11,19 @@ looker.plugins.visualizations.add({
   create: function(element, config) {
     element.innerHTML = "";
     this.container = element.appendChild(document.createElement("div"));
-    this.container.className = "pdf-container";
+    this.container.className = "image-container";
     
     const style = document.createElement("style");
     style.textContent = `
-      .pdf-container {
+      .image-container {
         width: 100%;
-        height: 100%;
         background: #f5f5f5;
         overflow: auto;
         padding: 20px;
       }
-      .pdf-page {
+      .pdf-image {
         background: white;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        margin-bottom: 20px;
         border-radius: 4px;
         max-width: 100%;
       }
@@ -36,13 +34,6 @@ looker.plugins.visualizations.add({
         border-radius: 4px;
         text-align: center;
       }
-      .loading-message {
-        color: #2b6cb0;
-        padding: 1rem;
-        background: #ebf8ff;
-        border-radius: 4px;
-        text-align: center;
-      }
     `;
     element.appendChild(style);
   },
@@ -50,30 +41,24 @@ looker.plugins.visualizations.add({
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
     this.clearErrors();
     
-    const appsScriptUrl = config.apps_script_url;
-    this.container.innerHTML = '<div class="loading-message">Converting PDF...</div>';
+    if (!data || !data[0]) {
+      this.addError({title: "No Data"});
+      return doneRendering();
+    }
 
-    fetch(appsScriptUrl, {
-      method: 'GET',
-      mode: 'cors',
-      headers: {'Accept': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.error) throw new Error(data.error);
-      
-      this.container.innerHTML = '';
-      data.images.forEach(image => {
-        const img = document.createElement('img');
-        img.src = `data:image/jpeg;base64,${image.data}`;
-        img.className = 'pdf-page';
-        this.container.appendChild(img);
-      });
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-    })
-    .finally(doneRendering);
+    const imageUrl = data[0].image_url?.value;
+    if (!imageUrl) {
+      this.container.innerHTML = '<div class="error-message">No image URL available</div>';
+      return doneRendering();
+    }
+
+    this.container.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.className = 'pdf-image';
+    img.style.height = `${config.image_height || 800}px`;
+    this.container.appendChild(img);
+    
+    doneRendering();
   }
 });
