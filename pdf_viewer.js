@@ -21,6 +21,10 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
+    element.appendChild(this.createStyles());
+  },
+
+  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -43,43 +47,53 @@ looker.plugins.visualizations.add({
         border-radius: 4px;
         text-align: center;
       }
-    `;
-    element.appendChild(style);
-  },
-
-  updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
-    this.clearErrors();
-    
-    if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
-      this.addError({title: "No Data"});
-      return doneRendering();
-    }
-
-    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const cloudFunctionUrl = config.cloud_function_url;
-    
-    this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
-
-    fetch(`${cloudFunctionUrl}?url=${encodeURIComponent(pdfUrl)}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
+      .loading-message {
+        color: #2b6cb0;
+        padding: 1rem;
+        background: #ebf8ff;
+        border-radius: 4px;
+        text-align: center;
       }
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (!data.signed_url) throw new Error('No signed URL received');
-      return window.pdfjsLib.getDocument({url: data.signed_url}).promise;
-    })
-    .then(pdf => this.renderPages(pdf))
-    .catch(error => {
-      console.error('PDF Error:', error);
-      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-    })
-    .finally(doneRendering);
+    `;
+    return style;
   },
 
-  renderPages: async function(pdf) {
+  updateAsync: async function(data, element, config, queryResponse, details, doneRendering) {
+    try {
+      this.clearErrors();
+      
+      if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
+        this.addError({title: "No Data"});
+        return doneRendering();
+      }
+
+      const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
+      const blobName = decodeURIComponent(pdfUrl.split('/intel_hub_pdfs/')[1]);
+      
+      this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
+
+      const response = await fetch(pdfUrl, {
+        method: 'GET',
+        mode: 'no-cors',
+        cache: 'no-cache'
+      });
+
+      if (response.type === 'opaque') {
+        const pdfBytes = await response.arrayBuffer();
+        const loadingTask = window.pdfjsLib.getDocument({data: pdfBytes});
+        const pdf = await loadingTask.promise;
+        await this.renderPDF(pdf);
+      }
+
+    } catch (error) {
+      console.error('Error:', error);
+      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+    }
+    
+    doneRendering();
+  },
+
+  renderPDF: async function(pdf) {
     this.container.innerHTML = '';
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
