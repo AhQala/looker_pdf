@@ -1,16 +1,10 @@
 looker.plugins.visualizations.add({
   options: {
-    image_height: {
-      type: "number",
-      label: "Viewer Height (px)",
-      default: 800,
-      section: "PDF Settings"
-    },
     cloud_function_url: {
       type: "string",
       label: "Cloud Function URL",
       default: "https://us-central1-csrm-nova-prod.cloudfunctions.net/intel_hub_pdfs",
-      section: "PDF Settings"
+      section: "Settings"
     }
   },
 
@@ -64,26 +58,21 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const cloudFunctionUrl = config.cloud_function_url;
+    const cloudFunctionUrl = config.cloud_function_url || 
+      "https://us-central1-csrm-nova-prod.cloudfunctions.net/intel_hub_pdfs";
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
-    const fetchUrl = `${cloudFunctionUrl}?url=${encodeURIComponent(pdfUrl)}`;
-    console.log("Fetching:", fetchUrl);
-
-    fetch(fetchUrl, {
+    fetch(`${cloudFunctionUrl}?url=${encodeURIComponent(pdfUrl)}`, {
       method: 'GET',
       mode: 'cors',
+      credentials: 'omit',
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Origin': 'https://efc66c30-8184-4bce-985b-2b39478647db.looker.app'
       }
     })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
       if (data.error) throw new Error(data.error);
       
@@ -97,10 +86,7 @@ looker.plugins.visualizations.add({
     })
     .catch(error => {
       console.error('Error:', error);
-      this.container.innerHTML = `
-        <div class="error-message">
-          Error loading PDF: ${error.message}
-        </div>`;
+      this.container.innerHTML = `<div class="error-message">Error loading PDF: ${error.message}</div>`;
     })
     .finally(doneRendering);
   }
