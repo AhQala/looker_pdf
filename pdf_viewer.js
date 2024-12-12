@@ -21,6 +21,10 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
+    element.appendChild(this.createStyles());
+  },
+
+  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -51,49 +55,43 @@ looker.plugins.visualizations.add({
         text-align: center;
       }
     `;
-    element.appendChild(style);
+    return style;
   },
 
-  updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
-    this.clearErrors();
-    
-    if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
-      this.addError({title: "No Data"});
-      return doneRendering();
-    }
+  updateAsync: async function(data, element, config, queryResponse, details, doneRendering) {
+    try {
+      this.clearErrors();
+      
+      if (!data?.[0] || !queryResponse.fields.dimension_like[0]) {
+        this.addError({title: "No Data"});
+        return doneRendering();
+      }
 
-    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const blobName = pdfUrl.split('/intel_hub_pdfs/')[1];
-    const cloudFunctionUrl = config.cloud_function_url;
-    
-    this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
+      const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
+      const blobName = pdfUrl.split('/intel_hub_pdfs/')[1];
+      
+      this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
-    fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`, {
-      method: 'GET',
-      mode: 'no-cors',
-      headers: {
-        'Accept': '*/*',
-        'Content-Type': 'application/json'
-      }
-    })
-    .then(response => {
-      if (response.type === 'opaque') {
-        return response.blob();
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data instanceof Blob) {
-        return window.pdfjsLib.getDocument({data: data}).promise;
-      }
-      return window.pdfjsLib.getDocument({url: data.signed_url}).promise;
-    })
-    .then(pdf => this.renderPDF(pdf))
-    .catch(error => {
+      const response = await fetch(`${config.cloud_function_url}?blob=${encodeURIComponent(blobName)}`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      const pdfDocument = await window.pdfjsLib.getDocument(result.signed_url).promise;
+      await this.renderPDF(pdfDocument);
+
+    } catch (error) {
       console.error('Error:', error);
       this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-    })
-    .finally(doneRendering);
+    }
+    
+    doneRendering();
   },
 
   renderPDF: async function(pdf) {
