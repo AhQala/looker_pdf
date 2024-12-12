@@ -22,13 +22,16 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
+    element.appendChild(this.createStyles());
+  },
+
+  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
         width: 100%;
         height: 100%;
         background: #f5f5f5;
-        overflow: auto;
         padding: 20px;
       }
       .pdf-page {
@@ -46,7 +49,7 @@ looker.plugins.visualizations.add({
         text-align: center;
       }
     `;
-    element.appendChild(style);
+    return style;
   },
 
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
@@ -58,17 +61,15 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const blobName = decodeURIComponent(pdfUrl.split('/intel_hub_pdfs/')[1]);
     const cloudFunctionUrl = config.cloud_function_url;
+    const blobName = pdfUrl.split('/intel_hub_pdfs/')[1];
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
     fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Origin': 'https://efc66c30-8184-4bce-985b-2b39478647db.looker.app'
-      }
+      mode: 'no-cors',
+      headers: {'Accept': 'application/json'}
     })
     .then(response => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -78,35 +79,31 @@ looker.plugins.visualizations.add({
       if (data.error) throw new Error(data.error);
       return window.pdfjsLib.getDocument(data.signed_url).promise;
     })
-    .then(pdf => {
-      const renderPage = async (pageNum) => {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        canvas.className = 'pdf-page';
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-        
-        this.container.appendChild(canvas);
-        
-        if (pageNum < pdf.numPages) {
-          await renderPage(pageNum + 1);
-        }
-      };
-      
-      this.container.innerHTML = '';
-      return renderPage(1);
-    })
+    .then(pdf => this.renderPages(pdf))
     .catch(error => {
       console.error('Error:', error);
       this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
     })
     .finally(doneRendering);
+  },
+
+  renderPages: async function(pdf) {
+    this.container.innerHTML = '';
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pdf-page';
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+      
+      this.container.appendChild(canvas);
+    }
   }
 });
