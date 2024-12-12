@@ -2,7 +2,6 @@ looker.plugins.visualizations.add({
   options: {
     cloud_function_url: {
       type: "string",
-      label: "Cloud Function URL",
       default: "https://us-central1-csrm-nova-prod.cloudfunctions.net/intel_hub_pdfs",
       section: "Settings"
     }
@@ -22,6 +21,10 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
+    element.appendChild(this.createStyles());
+  },
+
+  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -45,7 +48,7 @@ looker.plugins.visualizations.add({
         text-align: center;
       }
     `;
-    element.appendChild(style);
+    return style;
   },
 
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
@@ -64,22 +67,30 @@ looker.plugins.visualizations.add({
 
     fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`, {
       method: 'GET',
-      credentials: 'include',
+      mode: 'no-cors',
       headers: {
-        'Accept': 'application/json',
+        'Accept': '*/*',
         'Content-Type': 'application/json'
       }
     })
-    .then(async response => {
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch signed URL');
-      return data;
+    .then(response => {
+      if (response.type === 'opaque') {
+        // Handle opaque response
+        return response.blob();
+      }
+      return response.json();
     })
-    .then(data => window.pdfjsLib.getDocument(data.signed_url).promise)
+    .then(data => {
+      if (typeof data === 'blob') {
+        // Direct blob handling
+        return window.pdfjsLib.getDocument(URL.createObjectURL(data)).promise;
+      }
+      return window.pdfjsLib.getDocument(data.signed_url).promise;
+    })
     .then(pdf => this.renderPDF(pdf))
     .catch(error => {
-      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
       console.error('Error:', error);
+      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
     })
     .finally(doneRendering);
   },
