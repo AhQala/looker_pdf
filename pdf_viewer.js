@@ -1,9 +1,9 @@
 looker.plugins.visualizations.add({
   options: {
-    cloud_function_url: {
+    apps_script_url: {
       type: "string",
-      label: "Cloud Function URL",
-      default: "https://us-central1-csrm-nova-prod.cloudfunctions.net/intel_hub_pdfs",
+      label: "Apps Script Web App URL",
+      default: "https://script.google.com/a/macros/google.com/s/AKfycbzIp_FtOZPUPCxi4TOWjlq9gISZLvxLy9N63H-r_13o_u_iggyue-3MPOv7YDu0pXOD/exec",
       section: "Settings"
     }
   },
@@ -58,21 +58,24 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const cloudFunctionUrl = config.cloud_function_url || 
-      "https://us-central1-csrm-nova-prod.cloudfunctions.net/intel_hub_pdfs";
+    const appsScriptUrl = config.apps_script_url;
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
+    console.log("Processing URL:", pdfUrl);
 
-    fetch(`${cloudFunctionUrl}?url=${encodeURIComponent(pdfUrl)}`, {
+    fetch(`${appsScriptUrl}?url=${encodeURIComponent(pdfUrl)}`, {
       method: 'GET',
       mode: 'cors',
-      credentials: 'omit',
       headers: {
-        'Accept': 'application/json',
-        'Origin': 'https://efc66c30-8184-4bce-985b-2b39478647db.looker.app'
+        'Accept': 'application/json'
       }
     })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
     .then(data => {
       if (data.error) throw new Error(data.error);
       
