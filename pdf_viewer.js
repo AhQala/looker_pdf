@@ -21,7 +21,7 @@ looker.plugins.visualizations.add({
     this.viewerContainer = this.container.appendChild(document.createElement("div"));
     this.viewerContainer.className = "viewer-container";
 
-    // Load PDF.js if not already loaded
+    // Load PDF.js
     if (!window.pdfjsLib) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -31,6 +31,7 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
+    // Add styles
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -45,7 +46,6 @@ looker.plugins.visualizations.add({
         padding: 1rem;
         text-align: center;
         display: none;
-        font-family: sans-serif;
       }
       .pdf-message.error {
         color: red;
@@ -63,80 +63,33 @@ looker.plugins.visualizations.add({
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         max-width: 100%;
       }
-      .pdf-nav {
-        padding: 10px;
-        background: #f5f5f5;
-        border-bottom: 1px solid #ddd;
-        text-align: center;
-      }
-      .pdf-link {
-        display: inline-block;
-        padding: 8px 16px;
-        background: #4285f4;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        margin: 0 5px;
-      }
     `;
     element.appendChild(style);
   },
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
-    this.clearErrors();
+    this.clearError();
     
-    // Validate input data
     if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
-      this.addError({
-        title: "No Data",
-        message: "This visualization requires a dimension containing a PDF URL."
-      });
+      this.addError({title: "No Data"});
       return;
     }
 
-    // Validate Cloud Function URL
-    const cloudFunctionUrl = config.cloud_function_url || 
-      "https://us-central1-csrm-nova-prod.cloudfunctions.net/intel_hub_pdfs";
-    
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const height = config.pdf_height || this.options.pdf_height.default;
+    const blobName = decodeURIComponent(pdfUrl.split('/').pop());
+    const cloudFunctionUrl = config.cloud_function_url;
     
-    // Get the blob name from the URL
-    const blobName = pdfUrl.split('/').pop();
-    
-    // Reset containers
     this.messageEl.textContent = 'Loading PDF...';
     this.messageEl.className = 'pdf-message';
     this.viewerContainer.innerHTML = '';
-    this.container.style.height = `${height}px`;
-    
-    // Create navigation section
-    const navContainer = document.createElement('div');
-    navContainer.className = 'pdf-nav';
-    navContainer.innerHTML = `
-      <a href="${pdfUrl}" target="_blank" class="pdf-link">Open Original PDF</a>
-    `;
-    this.viewerContainer.appendChild(navContainer);
+    this.container.style.height = `${config.pdf_height || 800}px`;
 
-    // Fetch signed URL and render PDF
     fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Failed to get signed URL');
-        }
-        return response.json();
-      })
+      .then(response => response.json())
       .then(data => {
-        const signedUrl = data.signed_url;
-        if (window.pdfjsLib) {
-          return window.pdfjsLib.getDocument(signedUrl).promise;
-        } else {
-          throw new Error('PDF.js not loaded');
-        }
+        if (data.error) throw new Error(data.error);
+        return window.pdfjsLib.getDocument(data.signed_url).promise;
       })
       .then(pdf => {
-        this.messageEl.className = 'pdf-message';
-        
-        // Render all pages
         const renderPage = async (pageNum) => {
           const page = await pdf.getPage(pageNum);
           const viewport = page.getViewport({ scale: 1.5 });
@@ -161,12 +114,10 @@ looker.plugins.visualizations.add({
         return renderPage(1);
       })
       .catch(error => {
-        console.error('Error:', error);
-        this.messageEl.textContent = "Error loading PDF. Please check permissions and URL.";
+        console.error('PDF Error:', error);
+        this.messageEl.textContent = `Error loading PDF: ${error.message}`;
         this.messageEl.className = 'pdf-message error';
       })
-      .finally(() => {
-        doneRendering();
-      });
+      .finally(doneRendering);
   }
 });
