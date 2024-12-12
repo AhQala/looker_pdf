@@ -12,8 +12,7 @@ looker.plugins.visualizations.add({
     element.innerHTML = "";
     this.container = element.appendChild(document.createElement("div"));
     this.container.className = "pdf-container";
-
-    // Load PDF.js
+    
     if (!window.pdfjsLib) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -22,11 +21,7 @@ looker.plugins.visualizations.add({
       };
       document.head.appendChild(script);
     }
-    
-    element.appendChild(this.createStyles());
-  },
 
-  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -50,15 +45,8 @@ looker.plugins.visualizations.add({
         border-radius: 4px;
         text-align: center;
       }
-      .loading-message {
-        color: #2b6cb0;
-        padding: 1rem;
-        background: #ebf8ff;
-        border-radius: 4px;
-        text-align: center;
-      }
     `;
-    return style;
+    element.appendChild(style);
   },
 
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
@@ -70,18 +58,22 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const fileId = pdfUrl.split('/d/')[1].split('/')[0];
+    const blobName = decodeURIComponent(pdfUrl.split('/intel_hub_pdfs/')[1]);
     const cloudFunctionUrl = config.cloud_function_url;
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
-    fetch(`${cloudFunctionUrl}?fileId=${fileId}`, {
+    fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Origin': 'https://efc66c30-8184-4bce-985b-2b39478647db.looker.app'
       }
     })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    })
     .then(data => {
       if (data.error) throw new Error(data.error);
       return window.pdfjsLib.getDocument(data.signed_url).promise;
@@ -95,19 +87,20 @@ looker.plugins.visualizations.add({
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-
+        
         await page.render({
           canvasContext: context,
           viewport: viewport
         }).promise;
-
+        
         this.container.appendChild(canvas);
-
+        
         if (pageNum < pdf.numPages) {
           await renderPage(pageNum + 1);
         }
       };
-
+      
+      this.container.innerHTML = '';
       return renderPage(1);
     })
     .catch(error => {
