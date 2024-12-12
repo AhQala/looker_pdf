@@ -21,10 +21,6 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
-    element.appendChild(this.createStyles());
-  },
-
-  createStyles: function() {
     const style = document.createElement("style");
     style.textContent = `
       .pdf-container {
@@ -47,8 +43,15 @@ looker.plugins.visualizations.add({
         border-radius: 4px;
         text-align: center;
       }
+      .loading-message {
+        color: #2b6cb0;
+        padding: 1rem;
+        background: #ebf8ff;
+        border-radius: 4px;
+        text-align: center;
+      }
     `;
-    return style;
+    element.appendChild(style);
   },
 
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
@@ -75,17 +78,15 @@ looker.plugins.visualizations.add({
     })
     .then(response => {
       if (response.type === 'opaque') {
-        // Handle opaque response
         return response.blob();
       }
       return response.json();
     })
     .then(data => {
-      if (typeof data === 'blob') {
-        // Direct blob handling
-        return window.pdfjsLib.getDocument(URL.createObjectURL(data)).promise;
+      if (data instanceof Blob) {
+        return window.pdfjsLib.getDocument({data: data}).promise;
       }
-      return window.pdfjsLib.getDocument(data.signed_url).promise;
+      return window.pdfjsLib.getDocument({url: data.signed_url}).promise;
     })
     .then(pdf => this.renderPDF(pdf))
     .catch(error => {
