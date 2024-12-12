@@ -48,55 +48,54 @@ looker.plugins.visualizations.add({
   },
 
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
-    try {
-      this.clearErrors();
-      
-      if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
-        this.addError({title: "No Data"});
-        return doneRendering();
-      }
-
-      const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-      const blobName = decodeURIComponent(pdfUrl.split('/intel_hub_pdfs/')[1]);
-      
-      this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
-
-      window.pdfjsLib.getDocument({url: pdfUrl}).promise
-        .then(pdf => {
-          this.container.innerHTML = '';
-          return this.renderPage(pdf, 1);
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-        })
-        .finally(doneRendering);
-
-    } catch (error) {
-      console.error('Error:', error);
-      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-      doneRendering();
+    this.clearErrors();
+    
+    if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
+      this.addError({title: "No Data"});
+      return doneRendering();
     }
+
+    const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
+    const cloudFunctionUrl = config.cloud_function_url;
+    
+    this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
+
+    fetch(`${cloudFunctionUrl}?url=${encodeURIComponent(pdfUrl)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (!data.signed_url) throw new Error('No signed URL received');
+      return window.pdfjsLib.getDocument({url: data.signed_url}).promise;
+    })
+    .then(pdf => this.renderPages(pdf))
+    .catch(error => {
+      console.error('PDF Error:', error);
+      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+    })
+    .finally(doneRendering);
   },
 
-  renderPage: async function(pdf, pageNumber) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = document.createElement('canvas');
-    canvas.className = 'pdf-page';
-    const context = canvas.getContext('2d');
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-    
-    await page.render({
-      canvasContext: context,
-      viewport: viewport
-    }).promise;
-    
-    this.container.appendChild(canvas);
-    
-    if (pageNumber < pdf.numPages) {
-      await this.renderPage(pdf, pageNumber + 1);
+  renderPages: async function(pdf) {
+    this.container.innerHTML = '';
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pdf-page';
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+      
+      this.container.appendChild(canvas);
     }
   }
 });
