@@ -41,6 +41,7 @@ looker.plugins.visualizations.add({
         background: #fff5f5;
         border-radius: 4px;
         text-align: center;
+        margin: 1rem;
       }
       .loading-message {
         color: #2b6cb0;
@@ -48,6 +49,7 @@ looker.plugins.visualizations.add({
         background: #ebf8ff;
         border-radius: 4px;
         text-align: center;
+        margin: 1rem;
       }
     `;
     element.appendChild(style);
@@ -62,26 +64,33 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
-    const blobName = decodeURIComponent(pdfUrl.split('/').pop());
     const cloudFunctionUrl = config.cloud_function_url;
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
 
-    fetch(`${cloudFunctionUrl}?blob=${encodeURIComponent(blobName)}`, {
+    const fetchUrl = `${cloudFunctionUrl}?url=${encodeURIComponent(pdfUrl)}`;
+    console.log("Fetching:", fetchUrl);
+
+    fetch(fetchUrl, {
       method: 'GET',
+      mode: 'cors',
       headers: {
-        'Accept': 'application/json',
-        'Origin': 'https://efc66c30-8184-4bce-985b-2b39478647db.looker.app'
+        'Accept': 'application/json'
       }
     })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
     .then(data => {
       if (data.error) throw new Error(data.error);
       
       this.container.innerHTML = '';
       data.images.forEach(image => {
         const img = document.createElement('img');
-        img.src = `data:image/png;base64,${image.data}`;
+        img.src = `data:image/jpeg;base64,${image.data}`;
         img.className = 'pdf-page';
         this.container.appendChild(img);
       });
