@@ -2,8 +2,8 @@ looker.plugins.visualizations.add({
   options: {
     apps_script_url: {
       type: "string",
-      label: "Apps Script Web App URL",
-      default: "https://script.google.com/a/macros/google.com/s/AKfycbzIp_FtOZPUPCxi4TOWjlq9gISZLvxLy9N63H-r_13o_u_iggyue-3MPOv7YDu0pXOD/exec",
+      label: "Apps Script URL",
+      default: "https://script.google.com/a/macros/google.com/s/AKfycbzVzF_vxS8MlqpvzQoXyD6LOgG5iCmR6YiupooJXGPCnVMtDmCMoV2CppMisCkeWldM/exec",
       section: "Settings"
     }
   },
@@ -35,7 +35,6 @@ looker.plugins.visualizations.add({
         background: #fff5f5;
         border-radius: 4px;
         text-align: center;
-        margin: 1rem;
       }
       .loading-message {
         color: #2b6cb0;
@@ -43,7 +42,6 @@ looker.plugins.visualizations.add({
         background: #ebf8ff;
         border-radius: 4px;
         text-align: center;
-        margin: 1rem;
       }
     `;
     element.appendChild(style);
@@ -58,24 +56,16 @@ looker.plugins.visualizations.add({
     }
 
     const pdfUrl = data[0][queryResponse.fields.dimension_like[0].name].value;
+    const fileId = pdfUrl.match(/[-\w]{25,}/)[0];
     const appsScriptUrl = config.apps_script_url;
     
     this.container.innerHTML = '<div class="loading-message">Loading PDF...</div>';
-    console.log("Processing URL:", pdfUrl);
 
-    fetch(`${appsScriptUrl}?url=${encodeURIComponent(pdfUrl)}`, {
+    fetch(`${appsScriptUrl}?fileId=${fileId}`, {
       method: 'GET',
-      mode: 'cors',
-      headers: {
-        'Accept': 'application/json'
-      }
+      mode: 'cors'
     })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
       if (data.error) throw new Error(data.error);
       
