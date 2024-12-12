@@ -3,7 +3,7 @@ looker.plugins.visualizations.add({
     apps_script_url: {
       type: "string",
       label: "Apps Script URL",
-      default: "https://script.google.com/a/macros/google.com/s/AKfycbzn62O99FQJiDDsaY056QdZj3kv0aMGK2dcAjrwH9sE_78xBvG8ixHedhpDvUEU4KvRNQ/exec",
+      default: "https://script.google.com/a/macros/google.com/s/AKfycbxlrip7TgmjkGYGhDW-n_MQhUaAqaX30je8qLECTEcVG7klAm_W4GM8GQcvoCaxkZZs-g/exec",
       section: "Settings"
     }
   },
@@ -50,31 +50,30 @@ looker.plugins.visualizations.add({
   updateAsync: function(data, element, config, queryResponse, details, doneRendering) {
     this.clearErrors();
     
-    if (!data || !data[0] || !queryResponse.fields.dimension_like[0]) {
-      this.addError({title: "No Data"});
-      return doneRendering();
-    }
-
     const appsScriptUrl = config.apps_script_url;
-    this.container.innerHTML = '<div class="loading-message">Processing PDF...</div>';
+    this.container.innerHTML = '<div class="loading-message">Converting PDF...</div>';
 
-    fetch(appsScriptUrl)
-      .then(response => response.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        
-        this.container.innerHTML = '';
-        data.images.forEach(image => {
-          const img = document.createElement('img');
-          img.src = `data:image/jpeg;base64,${image.data}`;
-          img.className = 'pdf-page';
-          this.container.appendChild(img);
-        });
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        this.container.innerHTML = `<div class="error-message">Error loading PDF: ${error.message}</div>`;
-      })
-      .finally(doneRendering);
+    fetch(appsScriptUrl, {
+      method: 'GET',
+      mode: 'cors',
+      headers: {'Accept': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      
+      this.container.innerHTML = '';
+      data.images.forEach(image => {
+        const img = document.createElement('img');
+        img.src = `data:image/jpeg;base64,${image.data}`;
+        img.className = 'pdf-page';
+        this.container.appendChild(img);
+      });
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      this.container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+    })
+    .finally(doneRendering);
   }
 });
